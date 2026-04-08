@@ -97,18 +97,117 @@ const MOCK_MEASUREMENTS: Record<string, Measurement[]> = {
   ],
 };
 
+const API_BASE_URL = '/api/proxy';
+
 export default function App() {
   const [locations, setLocations] = useState<Location[]>(MOCK_LOCATIONS);
+  const [measurements, setMeasurements] = useState<Record<string, Measurement[]>>(MOCK_MEASUREMENTS);
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
   });
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>("oaq_live_d5qiupb8m_mnq7nf8f");
   const [isApiKeyDialogOpen, setIsApiKeyDialogOpen] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchLocations = async (key: string, query: string = '') => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      let url = `${API_BASE_URL}/locations`;
+      if (query) {
+        url += `?search=${encodeURIComponent(query)}`;
+      } else {
+        // Try to fetch a large number of locations if no search
+        url += `?limit=1000`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch locations: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      const fetchedLocations = Array.isArray(data) ? data : data.locations || [];
+      
+      setLocations(fetchedLocations);
+
+      // Populate measurements map from the fetched locations
+      const measurementsMap: Record<string, Measurement[]> = {};
+      fetchedLocations.forEach((loc: any) => {
+        if (loc.measurements) {
+          measurementsMap[loc.id] = loc.measurements;
+        }
+      });
+      setMeasurements(prev => ({ ...prev, ...measurementsMap }));
+    } catch (err) {
+      console.error('Error fetching locations:', err);
+      // Don't set error if we have mock data to fall back on
+      if (!apiKey) {
+        setLocations(MOCK_LOCATIONS);
+      } else {
+        setError('Could not fetch real-time locations. Please check your API key.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchMeasurements = async (locationId: string) => {
+    if (!apiKey) return;
+    
+    try {
+      let url = `${API_BASE_URL}/measurements?locationId=${locationId}`;
+      
+      if (dateRange.from && dateRange.to) {
+        url += `&from=${dateRange.from.toISOString()}&to=${dateRange.to.toISOString()}`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch measurements');
+      
+      const data = await response.json();
+      const fetchedMeasurements = Array.isArray(data) ? data : data.measurements || [];
+      
+      setMeasurements(prev => ({
+        ...prev,
+        [locationId]: fetchedMeasurements
+      }));
+    } catch (err) {
+      console.error('Error fetching measurements:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (apiKey) {
+      const timer = setTimeout(() => {
+        fetchLocations(apiKey, searchQuery);
+      }, 300); // Debounce API calls
+      return () => clearTimeout(timer);
+    }
+  }, [apiKey, searchQuery]);
+
+  useEffect(() => {
+    if (selectedLocation && apiKey) {
+      fetchMeasurements(selectedLocation.id);
+    }
+  }, [selectedLocation, apiKey, dateRange]);
 
   const filteredLocations = useMemo(() => {
     return locations.filter(loc => 
@@ -135,9 +234,6 @@ export default function App() {
     if (tempApiKey.trim()) {
       setApiKey(tempApiKey.trim());
       setIsApiKeyDialogOpen(false);
-      // Here you would normally trigger a fetch with the new key
-      setIsLoading(true);
-      setTimeout(() => setIsLoading(false), 1500); // Simulate loading
     }
   };
 
@@ -156,7 +252,40 @@ export default function App() {
       {/* Main Content */}
       <div className="flex-1 relative">
         {/* API Status Banner */}
-        {!apiKey && (
+        {apiKey && !error && !isLoading && (
+          <div className="absolute top-4 left-4 z-[1000] right-4 pointer-events-none">
+            <Alert className="bg-green-500/10 border-green-500/20 text-green-700 backdrop-blur shadow-lg pointer-events-auto max-w-fit">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <AlertTitle className="text-sm font-bold m-0">API Connected</AlertTitle>
+              </div>
+              <AlertDescription className="text-[10px] mt-0.5 opacity-80">
+                Live data from OAQ India network is active.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        {error && (
+          <div className="absolute top-4 left-4 z-[1000] right-4 pointer-events-none">
+            <Alert variant="destructive" className="bg-destructive/95 backdrop-blur shadow-lg pointer-events-auto">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle className="text-sm font-bold">API Error</AlertTitle>
+              <AlertDescription className="text-xs flex items-center justify-between gap-4">
+                <span>{error}</span>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-8 text-xs border-white/20 hover:bg-white/10"
+                  onClick={() => setIsApiKeyDialogOpen(true)}
+                >
+                  <Key className="w-3 h-3 mr-2" />
+                  Retry API
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        {!apiKey && !error && (
           <div className="absolute top-4 left-4 z-[1000] right-4 pointer-events-none">
             <Alert className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-primary/20 shadow-lg pointer-events-auto">
               <AlertCircle className="h-4 w-4 text-primary" />
@@ -188,7 +317,7 @@ export default function App() {
         {selectedLocation && (
           <LocationDetails 
             location={selectedLocation}
-            measurements={MOCK_MEASUREMENTS[selectedLocation.id] || []}
+            measurements={measurements[selectedLocation.id] || []}
             onClose={() => setSelectedLocation(null)}
           />
         )}

@@ -28,7 +28,12 @@ export default function Sidebar({ locations, onLocationSelect, onSearch, onDateC
     to: undefined,
   });
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    onSearch(value);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSearch(searchQuery);
   };
@@ -41,14 +46,14 @@ export default function Sidebar({ locations, onLocationSelect, onSearch, onDateC
           <h1 className="text-xl font-bold tracking-tight">OAQ India</h1>
         </div>
         
-        <form onSubmit={handleSearch} className="relative">
+        <form onSubmit={handleSearchSubmit} className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search locations..."
             className="pl-8"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </form>
 
