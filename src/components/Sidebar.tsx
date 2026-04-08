@@ -57,7 +57,8 @@ export default function Sidebar({ locations, onLocationSelect, onSearch, onDateC
             Filter by Date Range
           </label>
           <Popover>
-            <PopoverTrigger asChild>
+          <PopoverTrigger
+            render={
               <Button
                 variant="outline"
                 className={cn(
@@ -79,7 +80,8 @@ export default function Sidebar({ locations, onLocationSelect, onSearch, onDateC
                   <span>Pick a date range</span>
                 )}
               </Button>
-            </PopoverTrigger>
+            }
+          />
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
                 initialFocus
