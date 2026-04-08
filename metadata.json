@@ -1,0 +1,5 @@
+{
+  "name": "OAQ - India Air Quality Explorer",
+  "description": "A comprehensive dashboard for exploring air quality data across India. Features real-time map visualization, location search, and historical date filtering.",
+  "requestFramePermissions": ["geolocation"]
+}
